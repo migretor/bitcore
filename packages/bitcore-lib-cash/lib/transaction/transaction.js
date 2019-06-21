@@ -1218,4 +1218,12 @@ Transaction.prototype.isCoinbase = function() {
   return (this.inputs.length === 1 && this.inputs[0].isNull());
 };
 
+Transaction.prototype.hashForSig = function (priv, sighashType, inputNumber, subscript, val) {
+  var sig = Sighash.sign(this, priv, sighashType, inputNumber, subscript, new BN(val));
+  return BufferUtil.concat([
+    sig.toDER(),
+    BufferUtil.integerAsSingleByteBuffer(sighashType)
+  ]);
+}
+
 module.exports = Transaction;
