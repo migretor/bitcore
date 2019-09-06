@@ -39,7 +39,7 @@ export class P2pManager {
     for (let chainNetwork of Config.chainNetworks()) {
       const { chain, network } = chainNetwork;
       const chainConfig = Config.chainConfig(chainNetwork);
-      if (chainConfig.chainSource && chainConfig.chainSource !== 'p2p') {
+      if ((chainConfig.chainSource && chainConfig.chainSource !== 'p2p') || chainConfig.disabled) {
         continue;
       }
       const p2pWorker = new P2pWorker({
@@ -65,7 +65,6 @@ export class P2pWorker {
   private bitcoreP2p: any;
   private chainConfig: any;
   private events: EventEmitter;
-  private isSyncing: boolean;
   private messages: any;
   private pool: any;
   private connectInterval?: NodeJS.Timer;
@@ -76,6 +75,8 @@ export class P2pWorker {
   private blockModel: BlockModel;
   private lastHeartBeat: string;
   private queuedRegistrations: Array<NodeJS.Timer>;
+  public isSyncing: boolean;
+  public isSyncingNode = false;
   constructor({ chain, network, chainConfig, blockModel = BlockStorage }) {
     this.blockModel = blockModel;
     this.chain = chain;
@@ -154,7 +155,7 @@ export class P2pWorker {
         network: this.network,
         hash
       });
-      if (this.isSyncingNode && !this.isCachedInv(this.bitcoreP2p.Inventory.TYPE.TX, hash) && !this.isSyncing) {
+      if (this.isSyncingNode && !this.isCachedInv(this.bitcoreP2p.Inventory.TYPE.TX, hash)) {
         this.cacheInv(this.bitcoreP2p.Inventory.TYPE.TX, hash);
         this.processTransaction(message.transaction);
         this.events.emit('transaction', message.transaction);
@@ -195,7 +196,7 @@ export class P2pWorker {
     });
 
     this.pool.on('peerinv', (peer, message) => {
-      if (this.isSyncingNode && !this.isSyncing) {
+      if (this.isSyncingNode) {
         const filtered = message.inventory.filter(inv => {
           const hash = this.bitcoreLib.encoding
             .BufferReader(inv.hash)
@@ -371,8 +372,10 @@ export class P2pWorker {
     const { chain, network } = this;
     let currentHeight = Math.max(1, from);
     const originalSyncValue = this.isSyncing;
+    const originalSyncNodeValue = this.isSyncingNode;
     while (currentHeight < to) {
       this.isSyncing = true;
+      this.isSyncingNode = true;
       const locatorHashes = await ChainStateProvider.getLocatorHashes({
         chain,
         network,
@@ -405,9 +408,10 @@ export class P2pWorker {
       }
     }
     this.isSyncing = originalSyncValue;
+    this.isSyncingNode = originalSyncNodeValue;
   }
 
-  get isSyncingNode(): boolean {
+  getIsSyncingNode(): boolean {
     if (!this.lastHeartBeat) {
       return false;
     }
@@ -421,9 +425,10 @@ export class P2pWorker {
 
   async refreshSyncingNode() {
     while (!this.stopping) {
-      const wasSyncingNode = this.isSyncingNode;
+      const wasSyncingNode = this.getIsSyncingNode();
       this.lastHeartBeat = await StateStorage.getSyncingNode({ chain: this.chain, network: this.network });
-      const nowSyncingNode = this.isSyncingNode;
+      const nowSyncingNode = this.getIsSyncingNode();
+      this.isSyncingNode = nowSyncingNode;
       if (wasSyncingNode && !nowSyncingNode) {
         throw new Error('Syncing Node Renewal Failure');
       }
@@ -431,7 +436,7 @@ export class P2pWorker {
         logger.info(`This worker is now the syncing node for ${this.chain} ${this.network}`);
         this.sync();
       }
-      if (!this.lastHeartBeat || this.isSyncingNode) {
+      if (!this.lastHeartBeat || this.getIsSyncingNode()) {
         this.registerSyncingNode({ primary: true });
       } else {
         this.registerSyncingNode({ primary: false });
@@ -458,7 +463,7 @@ export class P2pWorker {
   async unregisterSyncingNode() {
     await wait(1000);
     this.lastHeartBeat = await StateStorage.getSyncingNode({ chain: this.chain, network: this.network });
-    if (this.isSyncingNode) {
+    if (this.getIsSyncingNode()) {
       await StateStorage.selfResignSyncingNode({
         chain: this.chain,
         network: this.network,

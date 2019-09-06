@@ -8,7 +8,7 @@ const providers = {
   ETH: new ETHTxProvider()
 };
 
-export class Transactions {
+export class TransactionsProxy {
   get({ chain }) {
     return providers[chain];
   }
@@ -17,9 +17,9 @@ export class Transactions {
     return this.get(params).create(params);
   }
 
-  async sign(params): Promise<any> {
+  sign(params): string {
     return this.get(params).sign(params);
   }
 }
 
-export default new Transactions();
+export default new TransactionsProxy();

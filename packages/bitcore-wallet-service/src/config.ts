@@ -63,6 +63,9 @@ module.exports = {
     defaultProvider: 'BitPay',
     fetchInterval: 60, // in minutes
   },
+  maintenanceOpts: {
+    maintenanceMode: false,
+  },
   // To use email notifications uncomment this:
   // emailOpts: {
   //  host: 'localhost',
@@ -75,12 +78,12 @@ module.exports = {
   //  defaultUnit: 'btc',
   //  publicTxUrlTemplate: {
   //    btc: {
-  //      livenet: 'https://insight.bitpay.com/tx/{{txid}}',
-  //      testnet: 'https://test-insight.bitpay.com/tx/{{txid}}',
+  //      livenet: 'https://insight.bitcore.io/#/BTC/mainnet/tx/{{txid}}',
+  //      testnet: 'https://insight.bitcore.io/#/BTC/testnet/tx/{{txid}}',
   //    },
   //    bch: {
-  //      livenet: 'https://bch-insight.bitpay.com/#/tx/{{txid}}',
-  //      testnet: 'https://test-bch-insight.bitpay.com/#/tx/{{txid}}',
+  //      livenet: 'https://insight.bitcore.io/#/BCH/mainnet/tx/{{txid}}',
+  //      testnet: 'https://insight.bitcore.io/#/BCH/testnet/tx/{{txid}}',
   //    }
   //  },
   // },
