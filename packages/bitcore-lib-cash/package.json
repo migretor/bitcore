@@ -1,8 +1,8 @@
 {
-  "name": "bitcore-lib-cash",
+  "name": "migretor-bitcore-lib-cash",
   "version": "8.6.0",
   "description": "A pure and powerful JavaScript Bitcoin Cash library.",
-  "author": "BitPay <dev@bitpay.com>",
+  "author": "",
   "main": "index.js",
   "scripts": {
     "lint": "gulp lint",
@@ -29,7 +29,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/bitpay/bitcore/tree/master/packages/bitcore-lib-cash"
+    "url": "https://github.com/skynxt/bitcore/tree/master/packages/bitcore-lib-cash"
   },
   "browser": {
     "request": "browser-request"
