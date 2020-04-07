@@ -1,16 +1,17 @@
 import { EventEmitter } from 'events';
-import logger from '../logger';
-import { StorageService } from './storage';
 import { LoggifyClass } from '../decorators/Loggify';
-import { EventStorage, IEvent, EventModel } from '../models/events';
-import { Storage } from './storage';
+import logger from '../logger';
+import { BlockEvent, CoinEvent, EventModel, EventStorage, TxEvent } from '../models/events';
 import { Config, ConfigService } from './config';
+import { StorageService } from './storage';
+import { Storage } from './storage';
 
 @LoggifyClass
 export class EventService {
   txEvent = new EventEmitter();
   blockEvent = new EventEmitter();
   addressCoinEvent = new EventEmitter();
+  events = new EventEmitter();
   storageService: StorageService;
   configService: ConfigService;
   eventModel: EventModel;
@@ -32,6 +33,7 @@ export class EventService {
     }
     logger.info('Starting Event Service');
     this.stopped = false;
+    this.events.emit('start');
     if (this.storageService.connected) {
       this.wireup();
     } else {
@@ -44,6 +46,7 @@ export class EventService {
   async stop() {
     logger.info('Stopping Event Service');
     this.stopped = true;
+    this.events.emit('stop');
   }
 
   async wireup() {
@@ -56,7 +59,7 @@ export class EventService {
       while (await txCursor.hasNext()) {
         const txEvent = await txCursor.next();
         if (txEvent) {
-          const tx = <IEvent.TxEvent>txEvent.payload;
+          const tx = txEvent.payload as TxEvent;
           this.txEvent.emit('tx', tx);
           lastTxUpdate = new Date();
         }
@@ -72,11 +75,9 @@ export class EventService {
       while (await blockCursor.hasNext()) {
         const blockEvent = await blockCursor.next();
         if (blockEvent) {
-          const block = <IEvent.BlockEvent>blockEvent.payload;
+          const block = blockEvent.payload as BlockEvent;
           this.blockEvent.emit('block', block);
-          console.log('EVENT::Emitting block');
           lastBlockUpdate = new Date();
-          console.log('Updated last block seen', lastBlockUpdate);
         }
       }
       if (!this.stopped) {
@@ -90,7 +91,7 @@ export class EventService {
       while (await addressTxCursor.hasNext()) {
         const addressTx = await addressTxCursor.next();
         if (addressTx) {
-          const addressCoin = <IEvent.CoinEvent>addressTx.payload;
+          const addressCoin = addressTx.payload as CoinEvent;
           this.addressCoinEvent.emit('coin', addressCoin);
           lastAddressTxUpdate = new Date();
         }
@@ -102,15 +103,15 @@ export class EventService {
     retryAddressTxCursor();
   }
 
-  async signalBlock(block: IEvent.BlockEvent) {
+  async signalBlock(block: BlockEvent) {
     await this.eventModel.signalBlock(block);
   }
 
-  async signalTx(tx: IEvent.TxEvent) {
+  async signalTx(tx: TxEvent) {
     await this.eventModel.signalTx(tx);
   }
 
-  async signalAddressCoin(payload: IEvent.CoinEvent) {
+  async signalAddressCoin(payload: CoinEvent) {
     await this.eventModel.signalAddressCoin(payload);
   }
 }

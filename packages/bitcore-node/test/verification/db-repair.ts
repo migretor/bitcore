@@ -1,28 +1,33 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import { Transform } from 'stream';
+import { BitcoinBlockStorage } from '../../src/models/block';
 import { CoinStorage } from '../../src/models/coin';
-import { Storage } from '../../src/services/storage';
-import { P2pWorker } from '../../src/services/p2p';
-import { Config } from '../../src/services/config';
-import { BlockStorage } from '../../src/models/block';
-import { validateDataForBlock } from './db-verify';
 import { TransactionStorage } from '../../src/models/transaction';
+import { Modules } from '../../src/modules';
+import { Config } from '../../src/services/config';
+import { Storage } from '../../src/services/storage';
+import { Verification } from '../../src/services/verification';
 
 (async () => {
-  const { CHAIN, NETWORK, FILE, DRYRUN } = process.env;
+  const { CHAIN, NETWORK, FILE, DRYRUN = true } = process.env;
   if (!CHAIN || !NETWORK || !FILE) {
     console.log('CHAIN, NETWORK, and FILE env variable are required');
     process.exit(1);
   }
+  const dry = DRYRUN && DRYRUN !== 'false';
   const chain = CHAIN || '';
   const network = NETWORK || '';
   await Storage.start();
+  Modules.loadConfigured();
+
   const chainConfig = Config.chainConfig({ chain, network });
-  const worker = new P2pWorker({ chain, network, chainConfig });
+  const workerClass = Verification.get(chain);
+  const worker = new workerClass({ chain, network, chainConfig });
   await worker.connect();
 
   const handleRepair = async data => {
+    const tip = await BitcoinBlockStorage.getLocalTip({ chain, network });
     switch (data.type) {
       case 'DUPE_TRANSACTION':
         {
@@ -40,7 +45,7 @@ import { TransactionStorage } from '../../src/models/transaction';
           let toKeep = dupeTxs[0];
           const wouldBeDeleted = dupeTxs.filter(c => c._id != toKeep._id);
 
-          if (DRYRUN) {
+          if (dry) {
             console.log('WOULD DELETE');
             console.log(wouldBeDeleted);
           } else {
@@ -53,12 +58,41 @@ import { TransactionStorage } from '../../src/models/transaction';
           }
         }
         break;
+
+      case 'FORK_PRUNE_COIN':
+        {
+          const coin = data.payload.coin;
+          const forkCoins = await CoinStorage.collection
+            .find({ chain, network, mintTxid: coin.mintTxid, mintIndex: coin.mintIndex, spentHeight: -2 })
+            .sort({ mintHeight: -1, spentHeight: -1 })
+            .toArray();
+
+          if (forkCoins.length === 0) {
+            console.log('No action required. Coin already pruned');
+            return;
+          }
+
+          const wouldBeDeleted = forkCoins;
+
+          if (dry) {
+            console.log('WOULD DELETE');
+            console.log(wouldBeDeleted);
+          } else {
+            console.log('Deleting', wouldBeDeleted.length, 'coins');
+            await CoinStorage.collection.deleteMany({
+              chain,
+              network,
+              _id: { $in: wouldBeDeleted.map(c => c._id) }
+            });
+          }
+        }
+        break;
       case 'DUPE_COIN':
         {
           const coin = data.payload.coin;
           const dupeCoins = await CoinStorage.collection
             .find({ chain, network, mintTxid: coin.mintTxid, mintIndex: coin.mintIndex })
-            .sort({ _id: -1 })
+            .sort({ mintHeight: -1, spentHeight: -1 })
             .toArray();
 
           if (dupeCoins.length < 2) {
@@ -71,7 +105,7 @@ import { TransactionStorage } from '../../src/models/transaction';
           toKeep = spentCoin || toKeep;
           const wouldBeDeleted = dupeCoins.filter(c => c._id != toKeep._id);
 
-          if (DRYRUN) {
+          if (dry) {
             console.log('WOULD DELETE');
             console.log(wouldBeDeleted);
           } else {
@@ -94,24 +128,32 @@ import { TransactionStorage } from '../../src/models/transaction';
       case 'MISSING_TX':
       case 'MISSING_COIN_FOR_TXID':
       case 'VALUE_MISMATCH':
+      case 'COIN_SHOULD_BE_SPENT':
       case 'NEG_FEE':
         const blockHeight = Number(data.payload.blockNum);
-        const { success } = await validateDataForBlock(blockHeight);
-        if (DRYRUN) {
+        let { success } = await worker.validateDataForBlock(blockHeight, tip!.height);
+        if (success) {
+          console.log('No errors found, repaired previously');
+          return;
+        }
+        if (dry) {
           console.log('WOULD RESYNC BLOCKS', blockHeight, 'to', blockHeight + 1);
           console.log(data.payload);
         } else {
-          if (!success) {
-            console.log('Resyncing Blocks', blockHeight, 'to', blockHeight + 1);
-            await worker.resync(blockHeight - 1, blockHeight + 1);
+          console.log('Resyncing Blocks', blockHeight, 'to', blockHeight + 1);
+          await worker.resync(blockHeight - 1, blockHeight + 1);
+          let { success, errors } = await worker.validateDataForBlock(blockHeight, tip!.height);
+          if (success) {
+            console.log('REPAIR SOLVED ISSUE');
           } else {
-            console.log('No errors found, repaired previously');
+            console.log('REPAIR FAILED TO SOLVE ISSUE');
+            console.log(errors);
           }
         }
         break;
       case 'DUPE_BLOCKHEIGHT':
       case 'DUPE_BLOCKHASH':
-        const dupeBlock = await BlockStorage.collection
+        const dupeBlock = await BitcoinBlockStorage.collection
           .find({ chain, network, height: data.payload.blockNum })
           .toArray();
 
@@ -125,12 +167,12 @@ import { TransactionStorage } from '../../src/models/transaction';
         toKeepBlock = processedBlock || toKeepBlock;
         const wouldBeDeletedBlock = dupeBlock.filter(c => c._id !== toKeepBlock._id);
 
-        if (DRYRUN) {
+        if (dry) {
           console.log('WOULD DELETE');
           console.log(wouldBeDeletedBlock);
         } else {
           console.log('Deleting', wouldBeDeletedBlock.length, 'block');
-          await BlockStorage.collection.deleteMany({
+          await BitcoinBlockStorage.collection.deleteMany({
             chain,
             network,
             _id: { $in: wouldBeDeletedBlock.map(c => c._id) }

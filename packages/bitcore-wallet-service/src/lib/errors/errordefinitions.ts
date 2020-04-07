@@ -8,14 +8,17 @@ const errors = {
   COPAYER_REGISTERED: 'Copayer ID already registered on server',
   COPAYER_VOTED: 'Copayer already voted on this transaction proposal',
   DUST_AMOUNT: 'Amount below dust threshold',
+  MORE_THAT_ONE_OUTPUT: 'This wallet supports transactions with only one output',
   INCORRECT_ADDRESS_NETWORK: 'Incorrect address network',
   ONLY_CASHADDR: 'Only cashaddr wo prefix is allowed for outputs',
   INSUFFICIENT_FUNDS: 'Insufficient funds',
   INSUFFICIENT_FUNDS_FOR_FEE: 'Insufficient funds for fee',
+  INSUFFICIENT_ETH_FEE: 'Your linked ETH wallet does not have enough ETH for fee',
   INVALID_ADDRESS: 'Invalid address',
   INVALID_CHANGE_ADDRESS: 'Invalid change address',
   KEY_IN_COPAYER: 'Key already registered',
   LOCKED_FUNDS: 'Funds are locked by pending transaction proposals',
+  LOCKED_ETH_FEE: 'Your linked ETH wallet does not have enough ETH for fee',
   HISTORY_LIMIT_EXCEEDED: 'Requested page limit is above allowed maximum',
   MAIN_ADDRESS_GAP_REACHED: 'Maximum number of consecutive addresses without activity reached',
   NOT_AUTHORIZED: 'Not authorized',
@@ -35,12 +38,14 @@ const errors = {
   WALLET_BUSY: 'Wallet is busy, try later',
   WALLET_NOT_COMPLETE: 'Wallet is not complete',
   WALLET_NOT_FOUND: 'Wallet not found',
-  WALLET_NEED_SCAN: 'Wallet needs addresses scan',
+  WALLET_NEED_SCAN: 'Wallet needs addresses scan'
 };
 
-const errorObjects = _.fromPairs(_.map(errors, (msg, code) => {
-  return [code, new ClientError(code, msg)];
-}));
+const errorObjects = _.fromPairs(
+  _.map(errors, (msg, code) => {
+    return [code, new ClientError(code, msg)];
+  })
+);
 
 errorObjects.codes = _.mapValues(errors, (v, k) => {
   return k;

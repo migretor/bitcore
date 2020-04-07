@@ -2,10 +2,41 @@
 
 module.exports = {
   MIN_FEE_PER_KB: 0,
-  MAX_FEE_PER_KB: 10000 * 1000, // 10k sat/b
-  MIN_TX_FEE: 0,
-  MAX_TX_FEE: 0.1 * 1e8,
-  MAX_TX_SIZE_IN_KB: 100,
+
+  MAX_FEE_PER_KB: {
+    btc: 10000 * 1000, // 10k sat/b
+    bch: 10000 * 1000, // 10k sat/b
+    eth: 50000000000, // 50 Gwei,
+    xrp: 50000000000
+  },
+
+  MIN_TX_FEE: {
+    btc: 0,
+    bch: 0,
+    eth: 0,
+    xrp: 0
+  },
+
+  MAX_TX_FEE: {
+    btc: 0.05 * 1e8,
+    bch: 0.05 * 1e8,
+    eth: 1 * 1e18, // 1 eth
+    xrp: 1 * 1e6 // 1 xrp
+  },
+
+  MAX_TX_SIZE_IN_KB: {
+    btc: 100,
+    bch: 100,
+    eth: 500,
+    xrp: 1000
+  },
+
+  // ETH
+  DEFAULT_GAS_LIMIT: 200000,
+  MIN_GAS_LIMIT: 21000,
+
+  // XRP has a non-refundable mininum activation fee / balance
+  MIN_XRP_BALANCE: 20000000,
 
   MAX_KEYS: 100,
 
@@ -58,6 +89,40 @@ module.exports = {
         nbBlocks: 2,
         defaultValue: 2000
       }
+    ],
+    eth: [
+      {
+        name: 'urgent',
+        nbBlocks: 1,
+        defaultValue: 10000000000
+      },
+      {
+        name: 'priority',
+        nbBlocks: 2,
+        defaultValue: 5000000000
+      },
+      {
+        name: 'normal',
+        nbBlocks: 3,
+        defaultValue: 1000000000
+      },
+      {
+        name: 'economy',
+        nbBlocks: 4,
+        defaultValue: 1000000000
+      },
+      {
+        name: 'superEconomy',
+        nbBlocks: 4,
+        defaultValue: 1000000000
+      }
+    ],
+    xrp: [
+      {
+        name: 'normal',
+        nbBlocks: 1, // 3 seconds
+        defaultValue: 12
+      }
     ]
   },
 
@@ -107,6 +172,9 @@ module.exports = {
   // Cache time fee levels (in ms)
   FEE_LEVEL_CACHE_DURATION: 6 * 60 * 1000,
 
+  // Cache time for latest copay version (in ms)
+  COPAY_VERSION_CACHE_DURATION: 6 * 60 * 1000,
+
   // Max allowed timespan for notification queries in seconds
   MAX_NOTIFICATIONS_TIMESPAN: 60 * 60 * 24 * 14, // ~ 2 weeks
   NOTIFICATIONS_TIMESPAN: 60,
@@ -119,8 +187,7 @@ module.exports = {
       delayAfter: 8, // begin slowing down responses after the 3rd request
       delayMs: 3000, // slow down subsequent responses by 3 seconds per request
       max: 15, // start blocking after 20 request
-      message:
-        'Too many wallets created from this IP, please try again after an hour'
+      message: 'Too many wallets created from this IP, please try again after an hour'
     },
     estimateFee: {
       windowMs: 60 * 10 * 1000, // 10 min window
@@ -149,5 +216,7 @@ module.exports = {
 
   BE_KEY_SALT: 'bws-auth-keysalt',
 
-  BROADCAST_RETRY_TIME: 350, // ms
+  NEW_BLOCK_THROTTLE_TIME_MIN: 5,
+
+  BROADCAST_RETRY_TIME: 350 // ms
 };

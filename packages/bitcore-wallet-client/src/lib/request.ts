@@ -3,7 +3,7 @@ import { Utils } from './common';
 
 const request = require('superagent');
 const async = require('async');
-const Package = require('../package.json');
+const Package = require('../../package.json');
 var log = require('./log');
 
 const util = require('util');
@@ -22,6 +22,7 @@ export class Request {
 
     // request can be overload only for testing
     this.r = opts.r || request;
+    this.supportStaffWalletId = opts.supportStaffWalletId;
 
     this.session = null;
     this.credentials = null;
@@ -122,8 +123,7 @@ export class Request {
         return cb(Request._parseError(res.body));
       }
 
-      if (res.body === '{"error":"read ECONNRESET"}')
-        return cb(new Errors.ECONNRESET_ERROR(JSON.parse(res.body)));
+      if (res.body === '{"error":"read ECONNRESET"}') return cb(new Errors.ECONNRESET_ERROR(JSON.parse(res.body)));
 
       return cb(null, res.body, res.header);
     });
@@ -152,13 +152,7 @@ export class Request {
         ret = new Errors[body.code]();
         if (body.message) ret.message = body.message;
       } else {
-        ret = new Error(
-          body.code +
-          ': ' +
-          (_.isObject(body.message)
-            ? JSON.stringify(body.message)
-            : body.message)
-        );
+        ret = new Error(body.code + ': ' + (_.isObject(body.message) ? JSON.stringify(body.message) : body.message));
       }
     } else {
       ret = new Error(body.error || JSON.stringify(body));
@@ -174,10 +168,12 @@ export class Request {
   //  @param {Object} args
   //  @param {Callback} cb
   post(url, args, cb) {
+    args = args || {};
     return this.doRequest('post', url, args, false, cb);
   }
 
   put(url, args, cb) {
+    args = args || {};
     return this.doRequest('put', url, args, false, cb);
   }
 
@@ -189,6 +185,7 @@ export class Request {
   get(url, cb) {
     url += url.indexOf('?') > 0 ? '&' : '?';
     url += 'r=' + _.random(10000, 99999);
+
     return this.doRequest('get', url, {}, false, cb);
   }
 

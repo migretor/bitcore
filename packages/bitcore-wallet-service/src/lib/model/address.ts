@@ -1,4 +1,6 @@
+import { Deriver } from 'crypto-wallet-core';
 import _ from 'lodash';
+import { AddressManager } from './addressmanager';
 
 const $ = require('preconditions').singleton();
 const Common = require('../common');
@@ -56,8 +58,8 @@ export class Address {
     x.publicKeys = opts.publicKeys;
     x.coin = opts.coin;
     x.network = Address.Bitcore[opts.coin]
-      .Address(x.address)
-      .toObject().network;
+      ? Address.Bitcore[opts.coin].Address(x.address).toObject().network
+      : opts.network;
     x.type = opts.type || Constants.SCRIPT_TYPES.P2SH;
     x.hasActivity = undefined;
     x.beRegistered = null;
@@ -82,39 +84,44 @@ export class Address {
     return x;
   }
 
-  static _deriveAddress(
-    scriptType,
-    publicKeyRing,
-    path,
-    m,
-    coin,
-    network,
-    noNativeCashAddr
-  ) {
-    $.checkArgument(
-      Utils.checkValueInCollection(scriptType, Constants.SCRIPT_TYPES)
-    );
+  static _deriveAddress(scriptType, publicKeyRing, path, m, coin, network, noNativeCashAddr) {
+    $.checkArgument(Utils.checkValueInCollection(scriptType, Constants.SCRIPT_TYPES));
 
-    const publicKeys = _.map(publicKeyRing, (item) => {
-      const xpub = new Address.Bitcore[coin].HDPublicKey(item.xPubKey);
+    const publicKeys = _.map(publicKeyRing, item => {
+      const xpub = Address.Bitcore[coin]
+        ? new Address.Bitcore[coin].HDPublicKey(item.xPubKey)
+        : new Address.Bitcore.btc.HDPublicKey(item.xPubKey);
       return xpub.deriveChild(path).publicKey;
     });
 
     let bitcoreAddress;
     switch (scriptType) {
-      case Constants.SCRIPT_TYPES.P2SH:
+      case Constants.SCRIPT_TYPES.P2WSH:
+        const nestedWitness = false;
         bitcoreAddress = Address.Bitcore[coin].Address.createMultisig(
           publicKeys,
           m,
-          network
+          network,
+          nestedWitness,
+          'witnessscripthash'
         );
+        break;
+      case Constants.SCRIPT_TYPES.P2SH:
+        bitcoreAddress = Address.Bitcore[coin].Address.createMultisig(publicKeys, m, network);
+        break;
+      case Constants.SCRIPT_TYPES.P2WPKH:
+        bitcoreAddress = Address.Bitcore.btc.Address.fromPublicKey(publicKeys[0], network, 'witnesspubkeyhash');
         break;
       case Constants.SCRIPT_TYPES.P2PKH:
         $.checkState(_.isArray(publicKeys) && publicKeys.length == 1);
-        bitcoreAddress = Address.Bitcore[coin].Address.fromPublicKey(
-          publicKeys[0],
-          network
-        );
+
+        if (Address.Bitcore[coin]) {
+          bitcoreAddress = Address.Bitcore[coin].Address.fromPublicKey(publicKeys[0], network);
+        } else {
+          const { addressIndex, isChange } = new AddressManager().parseDerivationPath(path);
+          const [{ xPubKey }] = publicKeyRing;
+          bitcoreAddress = Deriver.deriveAddress(coin.toUpperCase(), network, xPubKey, addressIndex, isChange);
+        }
         break;
     }
 
@@ -132,29 +139,12 @@ export class Address {
   }
 
   // noNativeCashAddr only for testing
-  static derive(
-    walletId,
-    scriptType,
-    publicKeyRing,
-    path,
-    m,
-    coin,
-    network,
-    isChange,
-    noNativeCashAddr = false
-  ) {
-    const raw = Address._deriveAddress(
-      scriptType,
-      publicKeyRing,
-      path,
-      m,
-      coin,
-      network,
-      noNativeCashAddr
-    );
+  static derive(walletId, scriptType, publicKeyRing, path, m, coin, network, isChange, noNativeCashAddr = false) {
+    const raw = Address._deriveAddress(scriptType, publicKeyRing, path, m, coin, network, noNativeCashAddr);
     return Address.create(
       _.extend(raw, {
         coin,
+        network,
         walletId,
         type: scriptType,
         isChange
